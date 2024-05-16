@@ -1,75 +1,62 @@
+import pandas as pd
+import matplotlib.pyplot as plt
 import os
-import openpyxl
-from PIL import Image, ImageDraw, ImageFont
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
-# Create the images folder if it doesn't exist
-if not os.path.exists('images'):
-    os.makedirs('images')
+# Read the Excel file
+file_path = 'Book2.xlsx'  # Replace with your actual file path
+df = pd.read_excel(file_path)
 
-# Open the Excel workbook
-wb = openpyxl.load_workbook('your_excel_file.xlsx')
-sheet = wb.active
+# Group the data by 'fynd_uid'
+grouped = df.groupby('fynd_uid')
 
-# Assuming SKU, top_length, bottom_length, and brust_size are in columns A, B, C, and D respectively
-sku_column = 'A'
-top_length_column = 'B'
-bottom_length_column = 'C'
-brust_size_column = 'D'
+# Directory to save images
+output_dir = 'images'
 
-# Define image dimensions and other parameters
-image_width = 800
-image_height = 600
-background_color = (255, 255, 255)  # White
-table_color = (0, 0, 0)  # Black
-text_color = (0, 0, 0)  # Black
-font_size = 18
-font = ImageFont.truetype("arial.ttf", font_size)
+# Create the directory if it doesn't exist
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
 
-# Define table parameters
-num_columns = 4  
-column_width = (image_width - 20) // num_columns  # Adjusted to include 20px space around the table
-row_height = 50  # Adjusted row height to include space for text
+# Path to the background image
+background_image_path = 'bg.jpeg'  # Replace with the path to your background image
 
-# Calculate the position of the table to center it in the image with 20px space around
-table_x = (image_width - num_columns * column_width) // 2
-table_y = (image_height - row_height) // 2
+# Function to create a size chart
+def create_size_chart(data, first_sku, background_image_path):
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.axis('off')
 
-# Create a new image for each row
-for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=1):
-    # Create a new image for each row
-    img = Image.new('RGB', (image_width, image_height), background_color)
-    draw = ImageDraw.Draw(img)
-    
-    # Draw table headers
-    headers = ['SKU', 'Top Length', 'Bottom Length', 'Brust Size']
-    for col_idx, header in enumerate(headers):
-        x0 = table_x + col_idx * column_width
-        y0 = table_y
-        x1 = table_x + (col_idx + 1) * column_width
-        y1 = table_y + row_height
-        draw.rectangle([x0, y0, x1, y1], outline=table_color, fill=table_color)
-        text_width, text_height = draw.textsize(header, font=font)
-        text_x = x0 + (column_width - text_width) // 2
-        text_y = y0 + (row_height - text_height) // 2
-        draw.text((text_x, text_y), header, fill=text_color, font=font)
-    
-    # Draw table data
-    for col_idx, cell_value in enumerate(row):
-        x0 = table_x + col_idx * column_width
-        y0 = table_y + row_height
-        x1 = table_x + (col_idx + 1) * column_width
-        y1 = table_y + 2 * row_height
-        draw.rectangle([x0, y0, x1, y1], outline=table_color, fill=None)
-        text = str(cell_value)
-        text_width, text_height = draw.textsize(text, font=font)
-        text_x = x0 + (column_width - text_width) // 2
-        text_y = y0 + (row_height - text_height) // 2
-        draw.text((text_x, text_y), text, fill=text_color, font=font)
-    
-    # Save the image with the SKU as filename inside the "images" folder
-    sku = row[0]
-    image_filename = f"images/{sku}.png"
-    img.save(image_filename)
+    # Load and plot the background image
+    img = plt.imread(background_image_path)
+    ax.imshow(img, aspect='auto', extent=[0, 10, 0, 4], alpha=0.7)
 
-# Close the workbook
-wb.close()
+    # Create table data
+    columns = ['Size', 'Shoulder', 'Chest', 'Top Length', 'Waist', 'Bottom Length']
+    table_data = [columns] + data[columns].values.tolist()
+
+    # Create the table
+    table = ax.table(cellText=table_data, colLabels=None, cellLoc='center', loc='center')
+
+    # Adjust table properties
+    table.auto_set_font_size(False)
+    table.set_fontsize(12)
+    table.scale(1.2, 1.2)
+
+    # Make table cells background transparent
+    for cell in table.get_celld().values():
+        cell.set_facecolor('none')
+        cell.set_edgecolor('black')  # Keep the borders for visibility
+
+    # Set title - removing Uid from title for now, can be replaced from Product name if required
+    plt.title(f'Size Chart', fontsize=15)
+
+    # Save the figure
+    output_path = os.path.join(output_dir, f'size_chart_{first_sku}.png')
+    plt.savefig(output_path, bbox_inches='tight', dpi=300)
+    plt.close(fig)
+
+# Create a size chart for each unique fynd_uid
+for fynd_uid, data in grouped:
+    first_sku = data['sku'].iloc[0]  # Get the first SKU for the current fynd_uid
+    create_size_chart(data, first_sku, background_image_path)
+
+print("Success -> Size charts created successfully in images folder")
